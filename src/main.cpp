@@ -6,9 +6,11 @@ using namespace SKSE::stl;
 
 #include "Hooks.h"
 #include "PoisonHandler.h"
+#include "SettingManager.h"
+#include "Papyrus.h"
 
-//using namespace SOS;
-//using namespace RGL;
+
+using namespace POS;
 
 void InitializeLogging()
 {
@@ -60,16 +62,20 @@ void InitializeMessaging() {
     if (!GetMessagingInterface()->RegisterListener([](MessagingInterface::Message* message) {
         switch (message->type) {
         case MessagingInterface::kPostLoad:
-            POS::Hooks::Install();
+            
             break;
             // It is now safe to do multithreaded operations, or operations against other plugins.
 
         case MessagingInterface::kPostPostLoad: // Called after all kPostLoad message handlers have run.
-
+            
             break;
 
         case MessagingInterface::kDataLoaded:
+            //POS::Hooks::Install();
+            break;
 
+        case MessagingInterface::kPostLoadGame:
+            ReapplyHandler::Clear();
             break;
         }
         })) {
@@ -104,9 +110,11 @@ SKSEPluginLoad(const LoadInterface* skse) {
     log::info("{} {} is loading...", plugin->GetName(), version);
     Init(skse);
 
+    SettingManager::Install();
 
     InitializeMessaging();
-
+    Papyrus::Register();
+    Hooks::Install();
     log::info("{} has finished loading.", plugin->GetName());
     return true;
 }

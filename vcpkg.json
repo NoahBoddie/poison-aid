@@ -27,7 +27,8 @@
             "description": "Build the SKSE plugin.",
             "dependencies": [
                 "commonlibsse-ng",
-                "xbyak"
+                "xbyak",
+                "simpleini"
             ]
         }
     },

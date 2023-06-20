@@ -13,14 +13,15 @@ namespace RE
 
 		std::string GetString() const { return str; }
 		const char* GetCString() const { return str; }
+		std::string_view GetView() const { return str; }
 
 		StringSetting(const char* a_name, const char* a_value)
 		{
 			name = a_name;
 			str = strdup(a_value);
 		}
-
-		operator std::string() const { return str; }
+		const char* operator*() { return str; }
+		operator std::string_view() const { return str; }
 		operator const char*() const { return str; }
 		operator RE::Setting* () { return reinterpret_cast<RE::Setting*>(this); }
 	};
