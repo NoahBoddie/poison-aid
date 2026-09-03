@@ -33,6 +33,20 @@ namespace POS
 			return 0;
 		}
 		
+		struct ProloguePatch : Xbyak::CodeGenerator
+		{
+			explicit ProloguePatch(uintptr_t address, uintptr_t length)
+			{
+				// Hook returns here. Execute the restored bytes and jump back to the original function.
+				for (size_t i = 0; i < length; i++)
+					db(*reinterpret_cast<uint8_t*>(address + i));
+
+				jmp(ptr[rip]);
+				dq(address + length);
+			}
+		};
+
+
 		struct PlayerCharacter__PendPoison
 		{
 			static void Patch()
@@ -76,6 +90,164 @@ namespace POS
 			static void thunk(RE::PlayerCharacter* a_this, RE::AlchemyItem* poison, RE::ObjectEquipParams* equip_params)
 			{
 				return PoisonHandler::Handle(a_this, poison, equip_params);
+			}
+
+			static inline REL::Relocation<decltype(thunk)> func;
+		};
+
+
+
+		struct MenuCallback__ApplyDosage
+		{
+			static void Install()
+			{
+				//SE: 6A1E30, AE: 6DC830, VR:???
+				auto hook_addr = REL::RelocationID(39407, 40482).address() + 0xB0;
+
+				auto& trampoline = SKSE::GetTrampoline();
+
+				func = trampoline.write_call<5>(hook_addr, thunk);
+
+
+				logger::info("MenuCallback__ApplyDosage complete...");
+			}
+
+
+			static void thunk(RE::PerkEntryPoint a1, RE::PlayerCharacter* a2, RE::TESObjectWEAP* a3, RE::AlchemyItem* a4, float& out)
+			{
+				func(a1, a2, a3, a4, out);
+				
+				if (auto list = PoisonHandler::equippedList) {
+					if (auto poison_health = list->GetByType<RE::ExtraHealth>()) {
+						out = std::max(1.0f, out * poison_health->health);
+					}
+				}
+			}
+
+
+			static inline REL::Relocation<decltype(thunk)> func;
+		};
+
+		struct MenuCallback__RemoveItemCall
+		{
+			static void Install()
+			{
+				//SE: 6A1E30, AE: 6DC830, VR:???
+				auto hook_addr = REL::RelocationID(39407, 40482).address() + 0x13F;
+
+				//auto return_addr = hook_addr + 0x5;
+
+				auto& trampoline = SKSE::GetTrampoline();
+
+				trampoline.write_call<6>(hook_addr, thunk);
+
+				//if (!placed_call)
+				//	func = (uintptr_t)code.getCode();
+				//else
+				//	func = place_query;
+
+
+				logger::info("PlayerCharacter__PendPoison complete...");
+				//*/
+			}
+
+
+			static RE::ObjectRefHandle* thunk(RE::PlayerCharacter* a_this,
+				RE::ObjectRefHandle* hidden,
+				RE::TESBoundObject* a1,
+				std::int32_t a2,
+				RE::ITEM_REMOVE_REASON a3,
+				RE::ExtraDataList* a4,
+				RE::TESObjectREFR* a5,
+				const RE::NiPoint3* a6,
+				const RE::NiPoint3* a7)
+			{
+				*hidden = a_this->RemoveItem(a1, a2, a3, PoisonHandler::equippedList, a5, a6, a7);
+				return hidden;
+				//return ;
+			}
+		};
+
+		struct StandardItemData__DisplayName
+		{
+			static void Install()
+			{
+				//889C90+4
+				//SE: 889C90, AE: xxxxxx, VR:???
+				auto hook_addr = REL::RelocationID(50926, 000000).address() + 0x4;
+
+				//auto return_addr = hook_addr + 0x5;
+
+				auto& trampoline = SKSE::GetTrampoline();
+
+				func = trampoline.write_branch<5>(hook_addr, thunk);
+
+				//if (!placed_call)
+				//	func = (uintptr_t)code.getCode();
+				//else
+				//	func = place_query;
+
+
+				logger::info("PlayerCharacter__PendPoison complete...");
+				//*/
+			}
+
+			//This expects a string managed by someone else.
+			static const char* thunk(RE::InventoryEntryData* a_this)
+			{
+
+				RE::StandardItemData;
+				RE::ExtraDataList* list = nullptr;
+				RE::ExtraTextDisplayData* display = nullptr;
+				float temper = 0;
+				float percent = 0;
+				
+				if (auto object = a_this->GetObject())
+				{
+					if (auto alch = object->As<RE::AlchemyItem>(); alch && alch->IsPoison())
+					{
+						if (a_this->extraLists->empty() == false)
+						{
+							if (list = a_this->extraLists->front())
+							{
+								if (auto poisonHealth = list->GetByType<RE::ExtraHealth>())
+								{
+									if (display = list->GetByType<RE::ExtraTextDisplayData>()){
+										temper = display->temperFactor;
+									}
+
+									percent = poisonHealth->health;
+								}
+							}
+						}
+					}
+				}
+
+				auto result = func(a_this);
+
+
+				//This needs to be update after, but this also creates the extra text. So pickle. And annoying.
+				//*
+
+				if (percent && list) {
+					bool existed = display;
+					if (!display) {
+						display = list->GetByType<RE::ExtraTextDisplayData>();
+					}
+
+					if (display && (!existed || temper != percent)) {
+
+						char buffer[288];
+						std::sprintf(buffer, "%s %i%%", result, (int)std::floor(percent * 100));//Make this a setting
+						display->displayName = buffer;
+						result = display->displayName.c_str();
+					}
+				}
+
+				//*/
+
+
+				return result;
 			}
 
 			static inline REL::Relocation<decltype(thunk)> func;
@@ -162,11 +334,12 @@ namespace POS
 					static_assert(offsetof(UnkA, menu) == 24);
 					static_assert(offsetof(UnkA, unk) == 40);
 
+					//This is actually "FxDelegateArgs"
 					
 					if (result == 2)
 						return;
 
-					logger::info("test {}?", result);
+					
 
 					//RE::InventoryMenu* menu = *reinterpret_cast<RE::InventoryMenu**>(g_unkPtr + 24);
 					auto inventory_menu = RE::UI::GetSingleton()->GetMenu<RE::InventoryMenu>();
@@ -181,10 +354,28 @@ namespace POS
 					}
 					else 
 					{
-						UnkB unk_b{};
-						UnkA unk_a{ inventory_menu.get(), unk_b };
+						constexpr bool use_real_type = true;
+
+
+						if (use_real_type)
+						{
+
+							RE::GFxValue gfx_count{ 1.0 };
+
+							RE::FxDelegateArgs args{ RE::GFxValue{}, inventory_menu.get(), nullptr, &gfx_count, 1 };
+
+							func(reinterpret_cast<uintptr_t>(&args));
+						}
+						else
+						{
+							UnkB unk_b{};
+							UnkA unk_a{ inventory_menu.get(), unk_b };
+
+							func(unk_a);
+						}
 						
-						func(unk_a);
+
+						
 					}
 				};
 
@@ -196,15 +387,19 @@ namespace POS
 
 				auto* item = menu->GetRuntimeData().itemList->GetSelectedItem();
 
+				if (!item)
+					return func(unk1);
+
 				RE::InventoryEntryData* obj = item->data.objDesc;
 
+				//Used to not call the original.
 				if (!obj)
-					return;
+					return func(unk1);
+
 				auto result = PoisonHandler::HandleRemovePoison(obj, callback);
 
 				if (result == 1) {
 					menu->GetRuntimeData().itemList->Update(RE::PlayerCharacter::GetSingleton());
-					
 					return;
 				}
 				else if (result == 0) {
@@ -236,16 +431,19 @@ namespace POS
 				{
 					Code(uintptr_t ret_addr)
 					{
-						mov(rdx, rsi);
+						if (REL::Module::IsAE() == true)
+							mov(rdx, rbp);
+						else
+							mov(rdx, rsi);
+
 						mov(rax, ret_addr);
 						jmp(rax);
 					}
 				} static code{ (uintptr_t)thunk<0> };
 
 
-				//SE: 0x7220B0+0x169, AE: 0x75F320+0x174, VR: ???
-				//NEW: SE: 0x7220B0+0x11A, AE: 0x75F320+0x11F, VR: ???
-				REL::Relocation<uintptr_t> hook{ REL::RelocationID(41778, 42859), REL::VariantOffset(0x11A, 0x11F, 0) };
+				//SE: 0x7220B0+0x11A, AE: 0x75F320+0x11F, VR: ???
+				REL::Relocation<uintptr_t> hook{ REL::RelocationID(41778, 42859), REL::VariantOffset(0x11A, 0x11F, 0x11A) };
 
 
 				auto& trampoline = SKSE::GetTrampoline();
@@ -268,9 +466,8 @@ namespace POS
 					}
 				} static code{ (uintptr_t)thunk<1> };
 
-				//SE: 0x6310A0+0x188, AE: 0x6691F0+0x18B, VR: ???
-				//NEW!: SE: 0x6310A0+0x148, AE: 0x6691F0+0x153, VR: ???
-				REL::Relocation<uintptr_t> hook{ REL::RelocationID(37799, 38748), REL::VariantOffset(0x148, 0x153, 0) };
+				//SE: 0x6310A0+0x148, AE: 0x6691F0+0x153, VR: ???
+				REL::Relocation<uintptr_t> hook{ REL::RelocationID(37799, 38748), REL::VariantOffset(0x148, 0x153, 0x148) };
 
 
 				auto& trampoline = SKSE::GetTrampoline();
@@ -374,10 +571,229 @@ namespace POS
 		//Wanna hook a null sub on the main update, 1405B2FF0+748 on 1.5.97. This way I can check real time difference and disregard it if
 		// the game is currently paused or something.
 
+		struct PoisonBlameHook
+		{
+			static void Install()
+			{
+				//Needs a beginning hook
+				//SE: 567A80, AE: xxx, VR: ???
+				auto hook = REL::RelocationID(34286, 0).address();
+				uintptr_t offset = 0x9;
+
+
+				struct Patch : Xbyak::CodeGenerator
+				{
+					explicit Patch(uintptr_t address, uintptr_t length)
+					{
+						// Hook returns here. Execute the restored bytes and jump back to the original function.
+						for (size_t i = 0; i < length; i++)
+							db(*reinterpret_cast<uint8_t*>(address + i));
+
+						jmp(ptr[rip]);
+						dq(address + length);
+					}
+				} static code{ hook, offset };
+
+
+
+				auto& trampoline = SKSE::GetTrampoline();
+
+				auto placed_call = IsCallOrJump(hook) > 0;
+
+				auto place_query = trampoline.write_branch<5>(hook, (uintptr_t)thunk);
+
+				if (!placed_call)
+					func = (uintptr_t)code.getCode();
+				else
+					func = place_query;
+
+			}
+
+
+			static void thunk(RE::ValueModifierEffect* a_this, RE::Actor* target, float value, RE::ActorValue av)
+			{
+				bool should = false;
+				bool disqualify = false;
+				//So this will need a value to say
+
+				auto middle = target->GetMiddleHighProcess();
+
+				//So it will be viable if 
+
+				auto group = target->GetCombatGroup();
+
+				RE::Actor* caster = nullptr;
+
+				
+
+				//target->IsInCombat();combat group is enough
+				target->GetCombatGroup()->searchState;
+				//Run this on
+				target->GetActorRuntimeData().boolFlags.any(RE::Actor::BOOL_FLAGS::kAngryWithPlayer);
+				middle->pickPocketed;//those who've witnessed people being pick pocketed will suspect you, so if they've come to suspect you, don't pick pocket
+				//around them.
+
+				float val;
+
+				if (av == RE::ActorValue::kHealth || av == RE::ActorValue::kNone && a_this->actorValue == RE::ActorValue::kHealth)
+				{
+					if (!target->IsDead() && a_this->spell->IsPoison())
+					{
+						//I think what I'll do is that I'll represent the time of death with a positive number, priming with 1, and invalid with 0.
+						target->GetMiddleHighProcess()->lastHitData;
+
+						auto caster = a_this->GetCasterActor();
+						if (caster && caster->IsPlayerRef() == true) {
+							val = target->AsActorValueOwner()->GetActorValue(RE::ActorValue::kLastFlattered);
+							
+							should = true;
+							
+							disqualify = (group && group->searchState && target->IsHostileToActor(caster.get())) ||
+								target->GetActorRuntimeData().boolFlags.any(RE::Actor::BOOL_FLAGS::kAngryWithPlayer) ||
+								(middle && middle->pickPocketed);
+
+							if (std::abs(val) == 2) {
+								target->AsActorValueOwner()->SetActorValue(RE::ActorValue::kLastFlattered, 0);
+								val = 0;
+							}
+
+						}
+						//a_cause && a_cause->IsPlayerRef() == true
+					}
+				}
+
+
+				func(a_this, target, value, av);
+
+				//if it's value is 0, it moves onto stage 1, waiting to actually be used. if it's value is stage 2, it's been used, and it's our hob to put it back
+
+
+				//This needs a second hook to work, the murder alarm takes place elsewhere
+				
+				if (should)
+				{
+					if (middle && middle->killQueued && val >= 0) {
+						target->AsActorValueOwner()->SetActorValue(RE::ActorValue::kLastFlattered, !disqualify ? 1.f : -1.f);
+					}
+				}
+				
+
+
+				/*
+				//Old
+				if (middle && middle->killQueued && should){
+					target->AsActorValueOwner()->SetActorValue(RE::ActorValue::kLastFlattered, 1);
+					//(uint8_t&)middle->killQueued |= (1 << 7);
+
+					//target->GetActorRuntimeData().boolBits &= (RE::Actor::BOOL_BITS)~std::to_underlying(RE::Actor::BOOL_BITS::kMurderAlarm);
+				}
+				else if (target->AsActorValueOwner()->GetActorValue(RE::ActorValue::kLastFlattered) == 2) {
+					target->AsActorValueOwner()->SetActorValue(RE::ActorValue::kLastFlattered, 0);
+				}
+				//*/
+			}
+
+
+			inline static REL::Relocation<decltype(thunk)> func;
+		};
+
+
+
+		struct PoisonForgive1Hook
+		{
+			static void Install()
+			{
+				//SE: 5DEF20, AE: xxx, VR: ???
+				auto hook = REL::RelocationID(36431, 0).address() + 0x1E7;
+
+
+				auto& trampoline = SKSE::GetTrampoline();
+
+				func = trampoline.write_call<5>(hook, thunk);
+			}
+
+
+			static RE::TESFaction* thunk(RE::Character* target)
+			{
+				auto value = target->AsActorValueOwner()->GetActorValue(RE::ActorValue::kLastFlattered);
+
+				if (value == 1.f) {
+					target->AsActorValueOwner()->SetActorValue(RE::ActorValue::kLastFlattered, 2);
+					return nullptr;
+				}
+				
+				if (value == -1.f) {
+					target->AsActorValueOwner()->SetActorValue(RE::ActorValue::kLastFlattered, -2.f);
+				}
+
+				return func(target);
+			}
+
+
+			inline static REL::Relocation<decltype(thunk)> func;
+		};
+
+
+		struct PoisonForgive2Hook
+		{
+			static void Install()
+			{
+				//SE: 5DEF20, AE: xxx, VR: ???
+				auto hook = REL::RelocationID(36431, 0).address() + 0x3E4;
+
+
+				struct Patch : Xbyak::CodeGenerator
+				{
+					explicit Patch(uintptr_t address, uintptr_t func)
+					{
+						mov(rdx, ptr[rbp + 0x57 + 0x10]);
+						mov(rax, func);
+						call(rax);
+						ret();
+
+					}
+				} static code{ hook, (uintptr_t)thunk };
+
+
+
+				auto& trampoline = SKSE::GetTrampoline();
+
+				func = trampoline.write_call<5>(hook, (uintptr_t)code.getCode());
+			}
+
+			
+			static RE::TESFaction* thunk(RE::Character* witness, RE::Character* target)
+			{
+				static RE::PlayerCharacter* player = RE::PlayerCharacter::GetSingleton();
+
+
+				auto middle = witness->GetMiddleHighProcess();
+
+				//So it will be viable if 
+
+				auto group = witness->GetCombatGroup();
+
+				//*
+				bool disqualify = (group && group->searchState && witness->IsHostileToActor(player)) ||
+					witness->GetActorRuntimeData().boolFlags.any(RE::Actor::BOOL_FLAGS::kAngryWithPlayer) ||
+					(middle && middle->pickPocketed);
+
+
+				if (!disqualify && target->AsActorValueOwner()->GetActorValue(RE::ActorValue::kLastFlattered) >= 1)
+					return nullptr;
+
+				return func(witness);
+			}
+
+
+			inline static REL::Relocation<RE::TESFaction*(RE::Character*)> func;
+		};
+
+
 	public:
 		static void Install()
 		{
-			SKSE::AllocTrampoline(70);
+			SKSE::AllocTrampoline(156);
 			//TestPatch::Patch();
 
 			//6A1E30+2B
@@ -402,11 +818,19 @@ namespace POS
 
 			//REL::Module::get().version().compare(v)
 			REL::safe_write(comp.address() + offset, op_addr, op_size);
+			MenuCallback__RemoveItemCall::Install();
+			MenuCallback__ApplyDosage::Install();
+			PoisonBlameHook::Install();
+			PoisonForgive1Hook::Install();
+			PoisonForgive2Hook::Install();
+			StandardItemData__DisplayName::Install();
 			AttackBlockHandler_Hook::Patch();
 			ItemDrop_Hook::Patch();
 			DecrementPoison_Hook::Patch();
 			MainUpdateHook::Patch();
 			PlayerCharacter__PendPoison::Patch();
+
+			
 		}
 	};
 

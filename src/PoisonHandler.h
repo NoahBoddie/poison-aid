@@ -137,22 +137,6 @@ namespace POS
     }
 
 
-    RE::ExtraPoison* GetExtraPoison(RE::InventoryEntryData* item)
-    {
-        auto lists = item->extraLists;
-
-        if (!lists || lists->empty())
-            return nullptr;
-
-        auto front = lists->front();
-
-        if (!front)
-            return nullptr;
-
-        RE::ExtraPoison* extra = front->GetByType<RE::ExtraPoison>();
-
-        return extra;
-    }
 
     bool HasEntry(RE::Character* target, RE::TESBoundObject* item, RE::ExtraDataList* list)
     {
@@ -303,6 +287,8 @@ namespace POS
 		//Instead of directly using this, I think I can probably just override the function that calls this,
 		// straight up.
 		
+        //inline static float pendingPoisonPercent = NAN;
+
 
         static void _HandleCallback(PrimaryType type)
         {
@@ -379,7 +365,7 @@ namespace POS
             SendEquipEvent(source_holder, player_nipointer, pending_poison, special_id, ref_id, true);
             
             if (player->DrinkPotion(pending_poison, equippedList) == true) {
-                RE::DebugNotification("You've poisoned yourself you dingus.");
+                RE::SendHUDMessage::ShowHUDMessage("You've poisoned yourself you dingus.");
                 //Play poisoned sound?
                 player->PlayPickUpSound(pending_poison, true, true);
             
@@ -462,7 +448,7 @@ namespace POS
                         float reapply_mult = dosage > 1 ? std::pow(SettingManager::reapplyDoseMult, dose_num) : SettingManager::reapplyDoseMult;
 
                         res = fmax(dosage * perk_mult * reapply_mult, 1);
-;
+
                         //Increase dose
                     }
 
@@ -515,8 +501,11 @@ namespace POS
 
                 extra_poison = GetExtraPoison(hand);
 
-                if (!extra_poison)
+                if (!extra_poison || !extra_poison->poison)
                 {
+                    if (extra_poison && !extra_poison->poison)
+                        logger::warn("warning, poison extra data found in {} with no poison form.", hand->GetDisplayName());
+
                     ApplyPoisonCallback(2, is_left);
                 }
                 else
@@ -570,29 +559,29 @@ namespace POS
                     switch (type)
                     {
                     case SecondaryType::PoisonSelf:
-                        message = std::vformat(SettingManager::confirmPoisonSelf, std::make_format_args(pending_poison->GetName()));
+                        message = std::vformat(SettingManager::confirmPoisonSelf, util::make_format_args(pending_poison->GetName()));
                         callback = _CallbackWrapper2<SecondaryType, _SecondaryCallback, SecondaryType::PoisonSelf, SecondaryType::Cancel>;
                         TEST_CreateMessage(message.c_str(), callback, 0, 25, 4, SettingManager::Yes, SettingManager::Cancel, nullptr);
                         break;
 
 
                     case SecondaryType::PoisonFortify:
-                        message = std::vformat(SettingManager::confirmPoisonFortify, std::make_format_args(pending_poison->GetName(), hand->GetDisplayName()));
+                        message = std::vformat(SettingManager::confirmPoisonFortify, util::make_format_args(pending_poison->GetName(), hand->GetDisplayName()));
                         callback = _CallbackWrapper2<SecondaryType, _SecondaryCallback, SecondaryType::PoisonFortify, SecondaryType::Cancel>;
                         TEST_CreateMessage(message.c_str(), callback, 0, 25, 4, SettingManager::Yes, SettingManager::Cancel, nullptr);
                         break;
                     case SecondaryType::PoisonReplace:
-                        message = std::vformat(SettingManager::confirmPoisonReplace, std::make_format_args(extra_poison->poison->GetName(), pending_poison->GetName(), hand->GetDisplayName()));
+                        message = std::vformat(SettingManager::confirmPoisonReplace, util::make_format_args(extra_poison->poison->GetName(), pending_poison->GetName(), hand->GetDisplayName()));
                         callback = _CallbackWrapper2<SecondaryType, _SecondaryCallback, SecondaryType::PoisonReplace, SecondaryType::Cancel>;
                         TEST_CreateMessage(message.c_str(), callback, 0, 25, 4, SettingManager::Yes, SettingManager::Cancel, nullptr);
                         break;
                     case SecondaryType::PoisonFortify | SecondaryType::IsRight:
-                        message = std::vformat(SettingManager::confirmPoisonFortify, std::make_format_args(pending_poison->GetName(), hand->GetDisplayName()));
+                        message = std::vformat(SettingManager::confirmPoisonFortify, util::make_format_args(pending_poison->GetName(), hand->GetDisplayName()));
                         callback = _CallbackWrapper2<SecondaryType, _SecondaryCallback, SecondaryType::FortifyRight, SecondaryType::Cancel>;
                         TEST_CreateMessage(message.c_str(), callback, 0, 25, 4, SettingManager::Yes, SettingManager::Cancel, nullptr);
                         break;
                     case SecondaryType::PoisonReplace | SecondaryType::IsRight:
-                        message = std::vformat(SettingManager::confirmPoisonReplace, std::make_format_args(extra_poison->poison->GetName(), pending_poison->GetName(), hand->GetDisplayName()));
+                        message = std::vformat(SettingManager::confirmPoisonReplace, util::make_format_args(extra_poison->poison->GetName(), pending_poison->GetName(), hand->GetDisplayName()));
                         callback = _CallbackWrapper2<SecondaryType, _SecondaryCallback, SecondaryType::ReplaceRight, SecondaryType::Cancel>;
                         TEST_CreateMessage(message.c_str(), callback, 0, 25, 4, SettingManager::Yes, SettingManager::Cancel, nullptr);
                         break;
@@ -814,7 +803,7 @@ namespace POS
                 }
                 else if (slot->formID == 0x00013F43)//LeftHand
                 {
-                    if (!SettingManager::rightEquipType)
+                    if (!SettingManager::leftEquipType)
                         return PoisonResult::InvalidAction;
 
                     result = _HandleHand(player, PrimaryType::PoisonLeft);
@@ -895,49 +884,49 @@ namespace POS
             switch (options)
             {
             case PrimaryType::PoisonSelf:
-                message = std::vformat(SettingManager::poisonSelf, std::make_format_args( poison->GetName()));
+                message = std::vformat(SettingManager::poisonSelf, util::make_format_args( poison->GetName()));
                 callback = _CallbackWrapper<_PrimaryCallback, PrimaryType::PoisonSelf, PrimaryType::Cancel>;
                 TEST_CreateMessage(message.c_str(), callback, 0, 25, 4, SettingManager::poisonDrink, SettingManager::Cancel, nullptr);
                 break;
 
 
             case PrimaryType::PoisonSelf | PrimaryType::PoisonRight:
-                message = std::vformat(SettingManager::poisonSelfOrHand, std::make_format_args(right_hand->GetDisplayName(), poison->GetName()));
+                message = std::vformat(SettingManager::poisonSelfOrHand, util::make_format_args(right_hand->GetDisplayName(), poison->GetName()));
                 callback = _CallbackWrapper<_PrimaryCallback, PrimaryType::PoisonSelf, PrimaryType::PoisonRight, PrimaryType::Cancel>;
                 TEST_CreateMessage(message.c_str(), callback, 0, 25, 4, SettingManager::poisonDrink, SettingManager::poisonRight, SettingManager::Cancel, nullptr);
                 break;
 
 
             case PrimaryType::PoisonSelf | PrimaryType::PoisonLeft:
-                message = std::vformat(SettingManager::poisonSelfOrHand, std::make_format_args(left_hand->GetDisplayName(), poison->GetName()));
+                message = std::vformat(SettingManager::poisonSelfOrHand, util::make_format_args(left_hand->GetDisplayName(), poison->GetName()));
                 callback = _CallbackWrapper<_PrimaryCallback, PrimaryType::PoisonSelf, PrimaryType::PoisonLeft, PrimaryType::Cancel>;
                 TEST_CreateMessage(message.c_str(), callback, 0, 25, 4, SettingManager::poisonDrink, SettingManager::poisonLeft, SettingManager::Cancel, nullptr);
                 break;
 
 
             case PrimaryType::PoisonSelf | PrimaryType::PoisonRight | PrimaryType::PoisonLeft:
-                message = std::vformat(SettingManager::poisonSelfOrBothHands, std::make_format_args(right_hand->GetDisplayName(), left_hand->GetDisplayName(), poison->GetName()));
+                message = std::vformat(SettingManager::poisonSelfOrBothHands, util::make_format_args(right_hand->GetDisplayName(), left_hand->GetDisplayName(), poison->GetName()));
                 callback = _CallbackWrapper<_PrimaryCallback, PrimaryType::PoisonSelf, PrimaryType::PoisonRight, PrimaryType::PoisonLeft, PrimaryType::Cancel>;
                 TEST_CreateMessage(message.c_str(), callback, 0, 25, 4, SettingManager::poisonDrink, SettingManager::poisonRight, SettingManager::poisonLeft, SettingManager::Cancel, nullptr);
                 break;
 
 
             case PrimaryType::PoisonRight:
-                message = std::vformat(SettingManager::poisonHand, std::make_format_args(right_hand->GetDisplayName(), poison->GetName()));
+                message = std::vformat(SettingManager::poisonHand, util::make_format_args(right_hand->GetDisplayName(), poison->GetName()));
                 callback = _CallbackWrapper<_PrimaryCallback, PrimaryType::PoisonRight, PrimaryType::Cancel>;
                 TEST_CreateMessage(message.c_str(), callback, 0, 25, 4, SettingManager::poisonRight, SettingManager::Cancel, nullptr);
                 break;
 
 
             case PrimaryType::PoisonLeft:
-                message = std::vformat(SettingManager::poisonHand, std::make_format_args(left_hand->GetDisplayName(), poison->GetName()));
+                message = std::vformat(SettingManager::poisonHand, util::make_format_args(left_hand->GetDisplayName(), poison->GetName()));
                 callback = _CallbackWrapper<_PrimaryCallback, PrimaryType::PoisonLeft, PrimaryType::Cancel>;
                 TEST_CreateMessage(message.c_str(), callback, 0, 25, 4, SettingManager::poisonLeft, SettingManager::Cancel, nullptr);
                 break;
 
 
             case PrimaryType::PoisonRight | PrimaryType::PoisonLeft:
-                message = std::vformat(SettingManager::poisonBothHands, std::make_format_args(right_hand->GetDisplayName(), left_hand->GetDisplayName(), poison->GetName()));
+                message = std::vformat(SettingManager::poisonBothHands, util::make_format_args(right_hand->GetDisplayName(), left_hand->GetDisplayName(), poison->GetName()));
                 callback = _CallbackWrapper<_PrimaryCallback, PrimaryType::PoisonRight, PrimaryType::PoisonLeft, PrimaryType::Cancel>;
                 TEST_CreateMessage(message.c_str(), callback, 0, 25, 4, SettingManager::poisonRight, SettingManager::poisonLeft, SettingManager::Cancel, nullptr);
                 break;
@@ -974,17 +963,21 @@ namespace POS
                 player = RE::PlayerCharacter::GetSingleton();
 
             loaded = true;
-
+            
             player->GetInfoRuntimeData().pendingPoison = poison;
             equippedList = list;
         }
 
-    
+        [[deprecated("Moved a param into the thing, don't need this anymore")]]
+        static void StorePoisonPercent(RE::ExtraDataList* list)
+        {
+
+        }
 
 		//I'm willing to have this function be a straight up rewrite.
 		static void Handle(RE::PlayerCharacter* player, RE::AlchemyItem* poison, RE::ObjectEquipParams* equip_params)
 		{
-            logger::info("{:X} ?", (uintptr_t)equip_params->unk18);
+            logger::debug("{:X} ?", (uintptr_t)equip_params->unk18);
 
             if (!poison)
                 return;
@@ -1011,7 +1004,7 @@ namespace POS
 
             case PoisonResult::InvalidSelf:
             {
-                std::string message = std::vformat(SettingManager::poisonUnableToPoisonSelf, std::make_format_args(poison->GetName()));
+                std::string message = std::vformat(SettingManager::poisonUnableToPoisonSelf, util::make_format_args(poison->GetName()));
                 SendPrompt(message.c_str());
                 break;
             }
@@ -1042,6 +1035,8 @@ namespace POS
 
         static bool _RemovePoison(RE::InventoryEntryData* item)
         {
+            return RemovePoison2(item);
+
 
             if (!item || !item->IsPoisoned() || !item->IsWorn())
                 return false;
@@ -1116,21 +1111,101 @@ namespace POS
                 if (count) {
                     player->AddObjectToContainer(poison, nullptr, count, nullptr);
 
-                    std::string message = std::vformat(SettingManager::poisonRecoverMessage, std::make_format_args(poison->GetName(), count));
-                    RE::DebugNotification(message.c_str());
+                    std::string message = std::vformat(SettingManager::poisonRecoverMessage, util::make_format_args(poison->GetName(), count));
+                    RE::SendHUDMessage::ShowHUDMessage(message.c_str());
 
                 }
                 else {
-                    RE::DebugNotification(SettingManager::poisonRemoveMessage);
+                    RE::SendHUDMessage::ShowHUDMessage(SettingManager::poisonRemoveMessage);
                 }
             }
             //The above should never not happen, but if it does, perhaps an exception is in order.
             return true;
         }
 
+
+        static bool RemovePoison2(RE::InventoryEntryData* item)
+        {
+
+
+            if (!item || !item->IsPoisoned() || !item->IsWorn())
+                return false;
+
+            auto* list = item->extraLists->front();
+
+            if (!list)
+                return false;
+
+            //All this needs to be a function.
+
+            RE::ExtraPoison* extra_poison = list->GetByType<RE::ExtraPoison>();
+
+            RE::PlayerCharacter* player = RE::PlayerCharacter::GetSingleton();
+
+            //This part should actually require some sort of effect in order to handle the in
+            RE::AlchemyItem* poison = extra_poison->poison;
+
+            //player->AddObjectToContainer(poison, nullptr, 1, nullptr);
+
+
+
+            RE::BGSCreatedObjectManager* obj_manager = RE::BGSCreatedObjectManager::GetSingleton();
+
+
+            float lose_chance = SettingManager::poisonRemoveChance;
+
+            float dosage = 1;
+
+
+
+            RE::BGSEntryPoint::HandleEntryPoint(RE::PerkEntryPoint::kModPoisonDoseCount, player, item->object, poison, &dosage);
+
+            if (dosage < 1)
+                dosage = 1;
+
+            dosage = extra_poison->count / dosage;
+            uint32_t count = (uint32_t)std::floorl(dosage);
+            dosage -= count;
+
+
+            if (list->Remove(RE::ExtraDataType::kPoison, extra_poison) == true) {
+                if (count) {
+                    player->AddObjectToContainer(poison, nullptr, count, nullptr);
+
+                    std::string message = std::vformat(SettingManager::poisonRecoverMessage, util::make_format_args(poison->GetName(), count));
+                    RE::SendHUDMessage::ShowHUDMessage(message.c_str());
+
+                }
+                else {
+                    RE::SendHUDMessage::ShowHUDMessage(SettingManager::poisonRemoveMessage);
+                }
+
+                if (0 < dosage) {
+                    RE::ExtraDataList* poisonList = CreateExtraDataList();
+                    
+                    auto percent = RE::BSExtraData::Create<RE::ExtraHealth>();
+                    percent->health = dosage;
+                    poisonList->Add(percent);
+                    player->AddObjectToContainer(poison, poisonList, 1, nullptr);
+                    count++;
+                }
+
+
+                if (poison->formID >= 0xFF000000)
+                {
+                    for (int i = 0; i < count; i++) {
+                        IncrementCreatedPoisonRef(obj_manager, poison);
+                    }
+                }
+
+            }
+
+            return true;
+        }
+
+
         static bool _Drop(RE::PlayerCharacter* player, RE::InventoryEntryData* item)
         {
-            player->GetCurrent3D();
             return true;
 
             logger::info("{} thread", std::hash<std::thread::id>{}(std::this_thread::get_id()));
@@ -1237,16 +1312,29 @@ namespace POS
 
             //Needs to be option later.
             if (SettingManager::cleanPrompt == 1 && item->IsQuestObject() == false) {
-                RE::ExtraPoison* ep = item->extraLists->front()->GetByType<RE::ExtraPoison>();
-                if (item->IsQuestObject() == false)
+                if (RE::ExtraPoison* ep = item->extraLists->front()->GetByType<RE::ExtraPoison>(); ep && ep->poison)
                 {
-                    std::string message = std::vformat(SettingManager::dropOrCleanPoison, std::make_format_args(ep->poison->GetName()));
-                    TEST_CreateMessage(message.c_str(), _callback, 0, 25, 4, SettingManager::drop, SettingManager::clean, SettingManager::Cancel, nullptr);
+                    
+
+
+                    if (item->IsQuestObject() == false)
+                    {
+                        std::string message = std::vformat(SettingManager::dropOrCleanPoison, util::make_format_args(ep->poison->GetName()));
+                        TEST_CreateMessage(message.c_str(), _callback, 0, 25, 4, SettingManager::drop, SettingManager::clean, SettingManager::Cancel, nullptr);
+                    }
+                    else
+                    {
+                        std::string message = std::vformat(SettingManager::cleanPoison, util::make_format_args(ep->poison->GetName()));
+                        TEST_CreateMessage(message.c_str(), _callback, 1, 25, 4, SettingManager::clean, SettingManager::Cancel, nullptr);
+                    }
                 }
                 else
                 {
-                    std::string message = std::vformat(SettingManager::cleanPoison, std::make_format_args(ep->poison->GetName()));
-                    TEST_CreateMessage(message.c_str(), _callback, 1, 25, 4, SettingManager::clean, SettingManager::Cancel, nullptr);
+                    if (ep && !ep->poison)
+                        logger::warn("warning, poison extra data found in {} with no poison form.", item->GetDisplayName());
+
+                    //SOMEHOW, no poison to remove, and nothing to impact.
+                    return 0;
                 }
                 
             }

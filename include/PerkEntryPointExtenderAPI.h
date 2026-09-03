@@ -146,7 +146,9 @@ namespace PerkEntryPointExtenderAPI
 
 		}
 		else {
-			logger::critical("Unsuccessful module and request, PEPE");
+			if (static unsigned int once = 0; once++)
+				logger::critical("Unsuccessful module and request, PEPE");
+
 			return nullptr;
 		}
 

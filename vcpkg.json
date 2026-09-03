@@ -4,36 +4,14 @@
     "version-string": "1.0.0",
     "port-version": 0,
     "description": "An SKSE plugin that provides tools and utilities for poison use.",
-    "homepage": "https://www.skyrimng.com",
-    "license": "Apache-2.0",
-    "features": {
-        "scripts": {
-            "description": "Install Papyrus sources for this program to develop on top of it."
-        },
-        "scripts-dev": {
-            "description": "Install Papyrus sources necessary to develop scripts for this plugin.",
-            "dependencies": [
-                "bethesda-skyrim-scripts",
-                {
-                    "name": "skse",
-                    "default-features": false,
-                    "features": [
-                        "scripts"
-                    ]
-                }
-            ]
-        },
-        "plugin": {
-            "description": "Build the SKSE plugin.",
-            "dependencies": [
-                "commonlibsse-ng",
-                "xbyak",
-                "simpleini"
-            ]
-        }
-    },
-    "default-features": [
-        "scripts-dev",
-        "plugin"
+    "license": "GPL-3.0-or-later",
+    "dependencies": [
+    "commonlibsse-ng",
+    "magic-enum",
+    "xbyak",
+    "directxmath",
+    "directxtk",
+    "openvr",
+    "simpleini"
     ]
 }

@@ -28,8 +28,8 @@ namespace POS
 	{
 		static void ReadSettings()
 		{
-			constexpr auto defaultSettingsPath = L"Data/MCM/Config/PoisonAid/settings.ini";
-			constexpr auto mcmPath = L"Data/MCM/Settings/PoisonAid.ini";
+			constexpr auto defaultSettingsPath = L"Data/MCM/Config/PoisonersAid/settings.ini";
+			constexpr auto mcmPath = L"Data/MCM/Settings/PoisonersAid.ini";
 
 			const auto readMCM = [&](std::filesystem::path path) {
 				CSimpleIniA mcm;
@@ -172,6 +172,14 @@ namespace POS
 		inline static bool promptType = false;
 		inline static float quickReapply = 0.75f;
 		inline static float quickExtraApply = 0.25f;
+
+		inline static bool widgetVisible = true;
+		inline static float leftWidgetX = 0;
+		inline static float leftWidgetY = 0;
+		inline static float rightWidgetX = 0;
+		inline static float rightWidgetY = 0;
+
+
 	};
 
 

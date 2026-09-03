@@ -57,6 +57,18 @@ void InitializeLogging()
 }
 
 
+struct CallbackTest : public RE::BSTEventSink<SKSE::ModCallbackEvent>
+{
+    RE::BSEventNotifyControl ProcessEvent(const SKSE::ModCallbackEvent* event, RE::BSTEventSource<SKSE::ModCallbackEvent>* source)
+    {
+        //We'll be able to recieve callbacks from this, just not the custom ones. But this should be enough for UI updates.
+
+        RE::SendHUDMessage::ShowHUDMessage(("event: "s + event->eventName.c_str()).c_str());
+
+        return RE::BSEventNotifyControl::kContinue;
+    }
+} singleton;
+
 
 void InitializeMessaging() {
     if (!GetMessagingInterface()->RegisterListener([](MessagingInterface::Message* message) {
@@ -72,6 +84,8 @@ void InitializeMessaging() {
 
         case MessagingInterface::kDataLoaded:
             //POS::Hooks::Install();
+            //SKSE::GetModCallbackEventSource()->AddEventSink(&singleton);
+            logger::info("hit");
             break;
 
         case MessagingInterface::kPostLoadGame:
@@ -83,8 +97,34 @@ void InitializeMessaging() {
     }
 }
 
+RE::BGSKeyword* pouchKeyword = nullptr;
+
+struct EquippedPoisonPouch : public RE::InventoryChanges::IItemChangeVisitor
+{
+    RE::BSContainer::ForEachResult Visit(RE::InventoryEntryData* a_entryData) override
+    {
+        result = a_entryData;
+
+        return RE::BSContainer::ForEachResult::kStop;
+    }
+    bool ShouldVisit(RE::InventoryEntryData* a_entryData, RE::TESBoundObject* object)
+    {
+        auto keyform = object->As<RE::BGSKeywordForm>();
+
+        if (!keyform) {
+            return false;
+        }
+
+        return a_entryData->IsWorn() && a_entryData->IsPoisoned() && keyform->HasKeyword(pouchKeyword);
+    }
+
+
+    RE::InventoryEntryData* result = nullptr;
+};
+
 
 SKSEPluginLoad(const LoadInterface* skse) {
+
 
     InitializeLogging();
 #ifdef _DEBUG
@@ -108,6 +148,8 @@ SKSEPluginLoad(const LoadInterface* skse) {
     const auto* plugin = PluginDeclaration::GetSingleton();
     auto version = plugin->GetVersion();
     log::info("{} {} is loading...", plugin->GetName(), version);
+    
+    
     Init(skse);
 
     SettingManager::Install();

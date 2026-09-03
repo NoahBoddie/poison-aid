@@ -6,8 +6,8 @@ message("Using toolchain file ${CMAKE_TOOLCHAIN_FILE}.")
 ########################################################################################################################
 project(
         PoisonAid
-        VERSION 1.0.0
-        DESCRIPTION "Placeholder."
+        VERSION 1.1.0.1
+        DESCRIPTION "Tools and utilities for the doling of toxins."
         LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -26,7 +26,7 @@ set(headers
 set(sources
         src/main.cpp
 
-        ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
+        ${CMAKE_CURRENT_BINARY_DIR}/version.rc "src/Widgets.h")
 
 source_group(
         TREE ${CMAKE_CURRENT_SOURCE_DIR}
@@ -44,10 +44,19 @@ message("\tTests: ${BUILD_TESTS}")
 ########################################################################################################################
 ## Configure target DLL
 ########################################################################################################################
+find_package(directxtk CONFIG REQUIRED)
 find_package(CommonLibSSE CONFIG REQUIRED)
 
 
-add_commonlibsse_plugin(${PROJECT_NAME} SOURCES ${headers} ${sources})
+
+add_library(
+		${PROJECT_NAME}
+		SHARED
+		${headers}
+		${sources}
+	 "src/Widgets.h")
+target_commonlibsse_properties(${PROJECT_NAME} ${ARGN})
+
 add_library("${PROJECT_NAME}::${PROJECT_NAME}" ALIAS "${PROJECT_NAME}")
 
 target_include_directories(${PROJECT_NAME}

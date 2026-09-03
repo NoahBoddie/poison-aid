@@ -123,13 +123,15 @@ namespace POS
             //For the amount of time it's here, I'll increment it, then decrement it. Before saving, it will be decremented. Or simply opening a menu will
             // cause it to decrement.
             //return;
-            RE::InventoryChanges* changes = player->GetInventoryChanges();
-
-            if (changes->GetItemCount(poison) > 0)
+            
+            //Causes crashes in AE
+            //RE::InventoryChanges* changes = player->GetInventoryChanges(true);
+            //if (changes->GetItemCount(poison) > 0)
+            if (player->GetItemCount(poison) > 0)
             {
                 //Here to tell you if you have no doses instead of just some.
-                std::string message = std::vformat(SettingManager::poisonRunOutMessage, std::make_format_args(poison->GetName()));
-                RE::DebugNotification(message.c_str());
+                std::string message = std::vformat(SettingManager::poisonRunOutMessage, util::make_format_args(poison->GetName()));
+                RE::SendHUDMessage::ShowHUDMessage(message.c_str());
 
                 //Should play a notification sound here to note that the poison you've run out of is reapplicable
                 reapplyData[is_worn == -1] = ReapplyData(poison, false);
@@ -205,8 +207,8 @@ namespace POS
                 //Should have custom sound, and shouldn't apply if a different poison has been applied to your weapons.
                 
                 if (data.HasApplied() == false) {
-                    std::string message = std::vformat(SettingManager::poisonReapplyMessage, std::make_format_args(poison->GetName(), hand_item->GetDisplayName()));
-                    RE::DebugNotification(message.c_str());
+                    std::string message = std::vformat(SettingManager::poisonReapplyMessage, util::make_format_args(poison->GetName(), hand_item->GetDisplayName()));
+                    RE::SendHUDMessage::ShowHUDMessage(message.c_str());
                 }
 
                 data = ReapplyData(poison, true);
