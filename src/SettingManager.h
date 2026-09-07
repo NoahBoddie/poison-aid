@@ -86,6 +86,8 @@ namespace POS
 		}
 		//Make these their own types I can expand on.
 
+		inline static RE::BGSKeyword* pouchKeyword = nullptr;
+		inline static RE::TESFaction* poisonedFaction = nullptr;
 
 		inline static RE::StringSetting confirmPoisonSelf{ "sConfirmPoisonSelf", "Are you sure you want to poison yourself with {}?" };
 		inline static RE::StringSetting confirmPoisonReplace{ "sConfirmPoisonReplace", "Are you sure you want to replace {} with {} on {}?" };
@@ -154,6 +156,15 @@ namespace POS
 			ReadSettings();
 		}
 
+		static void InitForms()
+		{
+			RE::TESDataHandler* handler = RE::TESDataHandler::GetSingleton();
+			poisonedFaction = handler->LookupForm<RE::TESFaction>(0x805, "PoisonersAid.esp");
+			assert(poisonedFaction);
+			if (!poisonedFaction) {
+				throw nullptr;
+			}
+		}
 
 		inline static uint8_t rightEquipType = 0;
 		inline static uint8_t leftEquipType = 0;

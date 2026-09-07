@@ -51,6 +51,8 @@ namespace POS
 		{
 			static void Patch()
 			{
+				//This should be a write_call, doing it this way is dangerious
+
 				//SE: 0x6A1CC0, AE: 0x6DC6C0, VR: ???
 				auto hook_addr = REL::RelocationID(39406, 40481).address();
 
@@ -102,7 +104,7 @@ namespace POS
 			static void Install()
 			{
 				//SE: 6A1E30, AE: 6DC830, VR:???
-				auto hook_addr = REL::RelocationID(39407, 40482).address() + 0xB0;
+				auto hook_addr = REL::RelocationID(39407, 40482).address() + RELOCATION_OFFSET(0xB0, 0x9D);
 
 				auto& trampoline = SKSE::GetTrampoline();
 
@@ -133,7 +135,7 @@ namespace POS
 			static void Install()
 			{
 				//SE: 6A1E30, AE: 6DC830, VR:???
-				auto hook_addr = REL::RelocationID(39407, 40482).address() + 0x13F;
+				auto hook_addr = REL::RelocationID(39407, 40482).address() + RELOCATION_OFFSET(0x13F, 0x129);
 
 				//auto return_addr = hook_addr + 0x5;
 
@@ -173,8 +175,8 @@ namespace POS
 			static void Install()
 			{
 				//889C90+4
-				//SE: 889C90, AE: xxxxxx, VR:???
-				auto hook_addr = REL::RelocationID(50926, 000000).address() + 0x4;
+				//SE: 889C90, AE: 8CBB30, VR:???
+				auto hook_addr = REL::RelocationID(50926, 51803).address() + 0x4;
 
 				//auto return_addr = hook_addr + 0x5;
 
@@ -188,7 +190,7 @@ namespace POS
 				//	func = place_query;
 
 
-				logger::info("PlayerCharacter__PendPoison complete...");
+				logger::info("StandardItemData__DisplayName complete...");
 				//*/
 			}
 
@@ -576,8 +578,8 @@ namespace POS
 			static void Install()
 			{
 				//Needs a beginning hook
-				//SE: 567A80, AE: xxx, VR: ???
-				auto hook = REL::RelocationID(34286, 0).address();
+				//SE: 567A80, AE: 58B690, VR: ???
+				auto hook = REL::RelocationID(34286, 35086).address();
 				uintptr_t offset = 0x9;
 
 
@@ -600,6 +602,8 @@ namespace POS
 
 				auto placed_call = IsCallOrJump(hook) > 0;
 
+				REL::safe_fill(hook, 0x90, 9 - 5);
+
 				auto place_query = trampoline.write_branch<5>(hook, (uintptr_t)thunk);
 
 				if (!placed_call)
@@ -609,6 +613,8 @@ namespace POS
 
 			}
 
+
+			
 
 			static void thunk(RE::ValueModifierEffect* a_this, RE::Actor* target, float value, RE::ActorValue av)
 			{
@@ -622,29 +628,18 @@ namespace POS
 
 				auto group = target->GetCombatGroup();
 
-				RE::Actor* caster = nullptr;
-
-				
-
-				//target->IsInCombat();combat group is enough
-				target->GetCombatGroup()->searchState;
-				//Run this on
-				target->GetActorRuntimeData().boolFlags.any(RE::Actor::BOOL_FLAGS::kAngryWithPlayer);
-				middle->pickPocketed;//those who've witnessed people being pick pocketed will suspect you, so if they've come to suspect you, don't pick pocket
-				//around them.
-
-				float val;
+				int val;
 
 				if (av == RE::ActorValue::kHealth || av == RE::ActorValue::kNone && a_this->actorValue == RE::ActorValue::kHealth)
 				{
-					if (!target->IsDead() && a_this->spell->IsPoison())
+					if (!target->IsPlayerRef() && !target->IsDead() && a_this->spell->IsPoison())
 					{
 						//I think what I'll do is that I'll represent the time of death with a positive number, priming with 1, and invalid with 0.
 						target->GetMiddleHighProcess()->lastHitData;
 
-						auto caster = a_this->GetCasterActor();
+						RE::NiPointer<RE::Actor> caster = a_this->GetCasterActor();
 						if (caster && caster->IsPlayerRef() == true) {
-							val = target->AsActorValueOwner()->GetActorValue(RE::ActorValue::kLastFlattered);
+							val = target->GetFactionRank(SettingManager::poisonedFaction, false);
 							
 							should = true;
 							
@@ -652,9 +647,13 @@ namespace POS
 								target->GetActorRuntimeData().boolFlags.any(RE::Actor::BOOL_FLAGS::kAngryWithPlayer) ||
 								(middle && middle->pickPocketed);
 
-							if (std::abs(val) == 2) {
-								target->AsActorValueOwner()->SetActorValue(RE::ActorValue::kLastFlattered, 0);
-								val = 0;
+							switch (val)
+							{
+								case PoisonedState::Escape:
+								case PoisonedState::Compromised:
+									target->RemoveFromFaction(SettingManager::poisonedFaction);
+									val = 0;
+									break;
 							}
 
 						}
@@ -672,25 +671,10 @@ namespace POS
 				
 				if (should)
 				{
-					if (middle && middle->killQueued && val >= 0) {
-						target->AsActorValueOwner()->SetActorValue(RE::ActorValue::kLastFlattered, !disqualify ? 1.f : -1.f);
+					if (middle && middle->killQueued && val >= PoisonedState::None) {
+						target->AddToFaction(SettingManager::poisonedFaction, !disqualify ? PoisonedState::Unseen : PoisonedState::Seen);
 					}
 				}
-				
-
-
-				/*
-				//Old
-				if (middle && middle->killQueued && should){
-					target->AsActorValueOwner()->SetActorValue(RE::ActorValue::kLastFlattered, 1);
-					//(uint8_t&)middle->killQueued |= (1 << 7);
-
-					//target->GetActorRuntimeData().boolBits &= (RE::Actor::BOOL_BITS)~std::to_underlying(RE::Actor::BOOL_BITS::kMurderAlarm);
-				}
-				else if (target->AsActorValueOwner()->GetActorValue(RE::ActorValue::kLastFlattered) == 2) {
-					target->AsActorValueOwner()->SetActorValue(RE::ActorValue::kLastFlattered, 0);
-				}
-				//*/
 			}
 
 
@@ -703,8 +687,8 @@ namespace POS
 		{
 			static void Install()
 			{
-				//SE: 5DEF20, AE: xxx, VR: ???
-				auto hook = REL::RelocationID(36431, 0).address() + 0x1E7;
+				//SE: 5DEF20, AE: 616CA0, VR: ???
+				auto hook = REL::RelocationID(36431, 37426).address() + 0x1E7;
 
 
 				auto& trampoline = SKSE::GetTrampoline();
@@ -715,15 +699,15 @@ namespace POS
 
 			static RE::TESFaction* thunk(RE::Character* target)
 			{
-				auto value = target->AsActorValueOwner()->GetActorValue(RE::ActorValue::kLastFlattered);
+				int value = target->GetFactionRank(SettingManager::poisonedFaction, false);
 
-				if (value == 1.f) {
-					target->AsActorValueOwner()->SetActorValue(RE::ActorValue::kLastFlattered, 2);
+				if (value == PoisonedState::Unseen) {
+					target->AddToFaction(SettingManager::poisonedFaction, PoisonedState::Escape);
 					return nullptr;
 				}
 				
-				if (value == -1.f) {
-					target->AsActorValueOwner()->SetActorValue(RE::ActorValue::kLastFlattered, -2.f);
+				if (value == PoisonedState::Seen) {
+					target->AddToFaction(SettingManager::poisonedFaction, PoisonedState::Compromised);
 				}
 
 				return func(target);
@@ -738,8 +722,8 @@ namespace POS
 		{
 			static void Install()
 			{
-				//SE: 5DEF20, AE: xxx, VR: ???
-				auto hook = REL::RelocationID(36431, 0).address() + 0x3E4;
+				//SE: 5DEF20, AE: 616CA0, VR: ???
+				auto hook = REL::RelocationID(36431, 37426).address() + RELOCATION_OFFSET(0x3E4, 0x3E6);
 
 
 				struct Patch : Xbyak::CodeGenerator
@@ -747,6 +731,7 @@ namespace POS
 					explicit Patch(uintptr_t address, uintptr_t func)
 					{
 						mov(rdx, ptr[rbp + 0x57 + 0x10]);
+						//mov(rdx, ptr[rbp + 0x57 + (REL::Module::IsSE() ? -0xB0 : -0x90)]);
 						mov(rax, func);
 						call(rax);
 						ret();
@@ -779,7 +764,7 @@ namespace POS
 					(middle && middle->pickPocketed);
 
 
-				if (!disqualify && target->AsActorValueOwner()->GetActorValue(RE::ActorValue::kLastFlattered) >= 1)
+				if (!disqualify && target->GetFactionRank(SettingManager::poisonedFaction, false) >= PoisonedState::Seen)
 					return nullptr;
 
 				return func(witness);
@@ -797,13 +782,7 @@ namespace POS
 			//TestPatch::Patch();
 
 			//6A1E30+2B
-			static constexpr std::uint8_t NoOperation3[0x3]{ 0x0F, 0x1F, 0x00 };
-			static_assert(sizeof(NoOperation3) == 0x3);
-
-
-			static constexpr std::uint8_t NoOperation2[0x2]{ 0x66, 0x90 };
-			static_assert(sizeof(NoOperation2) == 0x2);
-
+			
 			REL::RelocationID comp{ 39407, 40482 };//SE: 0x6A1E30, AE: 0x6DC830, VR:???
 
 
@@ -811,13 +790,7 @@ namespace POS
 
 			uintptr_t offset = 0x2B;
 			
-			//const uint8_t* op_addr = !IsAE() ? &Utility::NoOperation3[0] : &Utility::NoOperationA[0];
-			const uint8_t* op_addr = &NoOperation2[0];//&NoOperation3[0];
-			//size_t op_size = !IsAE() ? 0x3 : 0xA;
-			size_t op_size = 0x2;//0x3;
-
-			//REL::Module::get().version().compare(v)
-			REL::safe_write(comp.address() + offset, op_addr, op_size);
+			REL::safe_fill(comp.address() + offset, 0x90, 0x2);
 			MenuCallback__RemoveItemCall::Install();
 			MenuCallback__ApplyDosage::Install();
 			PoisonBlameHook::Install();

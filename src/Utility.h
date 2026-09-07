@@ -66,4 +66,17 @@ namespace POS
         return func(a_this);
     }
 
+
+    struct PoisonedState
+    {
+        enum
+        {
+            //This looks weird but I'm sure this will work fine.
+            Compromised = -4,
+            Seen = -3,
+            None = -2,
+            Unseen = 3,
+            Escape = 4,
+        };
+    };
 }

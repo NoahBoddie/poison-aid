@@ -85,7 +85,7 @@ void InitializeMessaging() {
         case MessagingInterface::kDataLoaded:
             //POS::Hooks::Install();
             //SKSE::GetModCallbackEventSource()->AddEventSink(&singleton);
-            logger::info("hit");
+            SettingManager::InitForms();
             break;
 
         case MessagingInterface::kPostLoadGame:
@@ -150,7 +150,7 @@ SKSEPluginLoad(const LoadInterface* skse) {
     log::info("{} {} is loading...", plugin->GetName(), version);
     
     
-    Init(skse);
+    Init(skse, false);
 
     SettingManager::Install();
 

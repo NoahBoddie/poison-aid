@@ -14,18 +14,31 @@ namespace POS
         char a5)
     //*/
 
-	//using MsgCallback = void(int, bool);
-	//sub_1406A1E30 apply poison callback. Should follow the above, and should also be loaded else where.
+	
+
+    void ApplyPoisonCallback2(int a)
+    {
+        //The original only took an integer, the bool is forced.
+        //SE: 0x6a1e30, AE: 0x6DC830
+        using func_t = decltype(&ApplyPoisonCallback2);
+        REL::Relocation<func_t> func{ RELOCATION_ID(39407, 40482) };
+        return func(a);
+    }
+    
+    //using MsgCallback = void(int, bool);
+    //sub_1406A1E30 apply poison callback. Should follow the above, and should also be loaded else where.
     //6A1E30
     //Give these a home plz
     void ApplyPoisonCallback(int a1, bool a2)
     {
+        //return ApplyPoisonCallback2(a1);
         //The original only took an integer, the bool is forced.
         //SE: 0x6a1e30, AE: 0x6DC830
         using func_t = decltype(&ApplyPoisonCallback);
         REL::Relocation<func_t> func{ RELOCATION_ID(39407, 40482) };
         return func(a1, a2);
     }
+
 
     //This likely is as described, second item is a form pointer, use this instead of inventory list and see how mileage varies.
     void UpdateRefInventory_Query(RE::TESObjectREFR* a_this, uint64_t a2)
@@ -488,6 +501,11 @@ namespace POS
 
             RE::ExtraPoison* extra_poison = nullptr;
 
+
+            if (!pending_poison) {
+                return PoisonResult::InvalidAction;
+            }
+
             if (!hand)
             {
                 if (SettingManager::drinkPrompt)
@@ -680,6 +698,7 @@ namespace POS
         {
             if (!hand)
             {
+                /*
                 //Is supposed run a perk entry point on the target.
                 float out = SettingManager::drinkPoisonValue;
                 
@@ -693,6 +712,8 @@ namespace POS
                 
                 if (out <= 0)
                     return PoisonResult::InvalidSelf;
+
+                //*/
             }
             else
             {
