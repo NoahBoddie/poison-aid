@@ -208,7 +208,7 @@ namespace POS
 				{
 					if (auto alch = object->As<RE::AlchemyItem>(); alch && alch->IsPoison())
 					{
-						if (a_this->extraLists->empty() == false)
+						if (a_this->extraLists && a_this->extraLists->empty() == false)
 						{
 							if (list = a_this->extraLists->front())
 							{
@@ -483,8 +483,6 @@ namespace POS
 			{
 				Patch1();
 				Patch2();
-
-				logger::info("TESConditionItem__IsTrue complete...");
 				//*/
 			}
 
@@ -493,12 +491,12 @@ namespace POS
 			static RE::AlchemyItem* thunk(RE::InventoryEntryData* item, RE::Character* aggressor)
 			{
 				RE::AlchemyItem* poison = func[I](item);
-
+				
 				//logger::info("{}/{} player, {} poison", aggressor->IsPlayerRef(), aggressor != nullptr, extra_poison != nullptr);
 				if (aggressor && aggressor->IsPlayerRef() && poison)
 				{
 					
-					ReapplyHandler::HandleOutOfPoison(skyrim_cast<RE::PlayerCharacter*>(aggressor), item);
+					ReapplyHandler::HandleOutOfPoison(RE::PlayerCharacter::GetSingleton(), item);
 				}
 
 				return poison;
@@ -516,13 +514,13 @@ namespace POS
 			static void Patch()
 			{
 				REL::Relocation<uintptr_t> vtable{ RE::VTABLE_AttackBlockHandler[0] };
-
-				func = vtable.write_vfunc(0x4, thunk);
+			
+				func = vtable.write_vfunc(REL::Module::IsAtLeast(SKSE::RUNTIME_SSE_1_7_99) ? 0x6 : 0x4, thunk);
 			}
 			
 			static void thunk(RE::AttackBlockHandler* a_this, RE::ButtonEvent* a_event, RE::PlayerControlsData* a_data)
 			{
-				if (auto activate_handle = RE::PlayerControls::GetSingleton()->GetActivateHandler();a_event->IsDown() == true && activate_handle->heldStateActive)
+				if (auto activate_handle = RE::PlayerControls::GetSingleton()->GetActivateHandler(); a_event->IsDown() == true && activate_handle->heldStateActive)
 				{
 					bool is_left = a_event->QUserEvent() == RE::UserEvents::GetSingleton()->leftAttack;
 
@@ -550,9 +548,9 @@ namespace POS
 			}
 
 		private:
-			static void thunk()
+			static uint64_t thunk(uint64_t a1, uint64_t a2)
 			{
-				func();
+				
 
 				//static float globalTime = 0;
 
@@ -565,6 +563,9 @@ namespace POS
 				float update_time = RE::GetSecondsSinceLastFrame();
 
 				ReapplyHandler::Update(update_time);
+				
+				
+				return func(a1, a2);
 			}
 
 			static inline REL::Relocation<decltype(thunk)> func;

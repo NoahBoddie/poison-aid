@@ -6,7 +6,7 @@ message("Using toolchain file ${CMAKE_TOOLCHAIN_FILE}.")
 ########################################################################################################################
 project(
         PoisonAid
-        VERSION 1.1.0.1
+        VERSION 1.1.3.0
         DESCRIPTION "Tools and utilities for the doling of toxins."
         LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
